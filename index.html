@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>バスケ試合記録アプリ</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --text:#1c1f26; --sub:#6b7280; --line:#e3e6eb; --accent:#e8590c; --ok:#2b8a3e; --ng:#c92a2a; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin:0; font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; background:var(--bg); color:var(--text); }
+  header { background:var(--accent); color:#fff; padding:12px 16px; font-weight:700; }
+  nav { display:flex; background:var(--card); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; }
+  nav button { flex:1; padding:12px 0; border:0; background:none; font-size:15px; color:var(--sub); border-bottom:3px solid transparent; }
+  nav button.on { color:var(--accent); border-bottom-color:var(--accent); font-weight:700; }
+  main { padding:12px; max-width:640px; margin:0 auto; }
+  .card { background:var(--card); border-radius:12px; padding:12px; margin-bottom:12px; border:1px solid var(--line); }
+  h2 { font-size:15px; margin:0 0 8px; }
+  input[type=text], input[type=number] { padding:10px; border:1px solid var(--line); border-radius:8px; font-size:16px; width:100%; }
+  .row { display:flex; gap:8px; }
+  button.primary { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:10px 14px; font-size:15px; font-weight:700; }
+  button.ghost { background:#fff; border:1px solid var(--line); border-radius:8px; padding:8px 12px; font-size:14px; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .chip { border:2px solid var(--line); background:#fff; border-radius:999px; padding:8px 14px; font-size:15px; }
+  .chip.sel { border-color:var(--accent); background:#fff1e8; font-weight:700; }
+  .score { display:flex; justify-content:center; align-items:center; gap:18px; font-size:34px; font-weight:800; }
+  .score small { display:block; font-size:12px; color:var(--sub); font-weight:400; text-align:center; }
+  .grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+  .grid button { padding:16px 4px; font-size:16px; border-radius:10px; border:0; color:#fff; font-weight:700; }
+  .ok { background:var(--ok); } .ng { background:var(--ng); } .nt { background:#364fc7; }
+  .grid3 { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .grid3 button { padding:14px 2px; font-size:15px; border-radius:10px; border:0; color:#fff; font-weight:700; }
+  .log { font-size:14px; padding:6px 0; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; }
+  .muted { color:var(--sub); font-size:13px; }
+  .scroll { overflow-x:auto; }
+  table { border-collapse:collapse; width:100%; font-size:14px; white-space:nowrap; }
+  th, td { padding:8px 6px; text-align:right; border-bottom:1px solid var(--line); }
+  th:first-child, td:first-child { text-align:left; position:sticky; left:0; background:var(--card); }
+  th { color:var(--sub); font-weight:600; font-size:12px; }
+  .hide { display:none; }
+  .item { display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--line); }
+</style>
+</head>
+<body>
+<header>🏀 バスケ試合記録</header>
+<nav id="tabs">
+  <button data-tab="players" class="on">選手</button>
+  <button data-tab="record">記録</button>
+  <button data-tab="stats">集計</button>
+  <button data-tab="history">履歴</button>
+</nav>
+<main>
+  <!-- 選手登録 -->
+  <section id="tab-players">
+    <div class="card">
+      <h2>選手を追加</h2>
+      <div class="row">
+        <input type="number" id="pNum" placeholder="背番号" style="width:90px">
+        <input type="text" id="pName" placeholder="名前">
+        <button class="primary" id="addPlayer">追加</button>
+      </div>
+    </div>
+    <div class="card"><h2>登録済みの選手</h2><div id="playerList"></div></div>
+  </section>
+
+  <!-- 試合中の記録 -->
+  <section id="tab-record" class="hide">
+    <div class="card">
+      <div class="row">
+        <input type="text" id="opponent" placeholder="対戦相手(例:○○大学)">
+      </div>
+    </div>
+    <div class="card">
+      <div class="score">
+        <div><span id="myScore">0</span><small>自チーム</small></div>
+        <div>-</div>
+        <div><span id="oppScore">0</span><small>相手</small></div>
+      </div>
+      <div class="row" style="margin-top:10px; justify-content:center">
+        <button class="ghost" data-opp="1">相手 +1</button>
+        <button class="ghost" data-opp="2">相手 +2</button>
+        <button class="ghost" data-opp="3">相手 +3</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>1. 選手を選ぶ</h2>
+      <div class="chips" id="selectChips"></div>
+      <p class="muted" id="noPlayerMsg">先に「選手」タブで選手を登録してください。</p>
+    </div>
+    <div class="card">
+      <h2>2. プレーをタップ</h2>
+      <div class="grid">
+        <button class="ok" data-ev="2PM">2P 成功</button>
+        <button class="ng" data-ev="2PX">2P 失敗</button>
+        <button class="ok" data-ev="3PM">3P 成功</button>
+        <button class="ng" data-ev="3PX">3P 失敗</button>
+        <button class="ok" data-ev="FTM">FT 成功</button>
+        <button class="ng" data-ev="FTX">FT 失敗</button>
+      </div>
+      <div class="grid3" style="margin-top:8px">
+        <button class="nt" data-ev="REB">リバウンド</button>
+        <button class="nt" data-ev="AST">アシスト</button>
+        <button class="nt" data-ev="STL">スティール</button>
+        <button class="nt" data-ev="TO">ターンオーバー</button>
+        <button class="nt" data-ev="PF">ファウル</button>
+        <button class="ghost" id="undo" style="color:#000">↩ 取り消し</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>直近の記録</h2>
+      <div id="log"></div>
+    </div>
+    <button class="primary" id="finish" style="width:100%; padding:14px">試合を終了して保存</button>
+  </section>
+
+  <!-- 集計 -->
+  <section id="tab-stats" class="hide">
+    <div class="card">
+      <h2>今の試合の個人成績</h2>
+      <div class="scroll"><table id="statsTable"></table></div>
+      <p class="muted">PTS=得点 / FG%=2P・3Pの成功率 / 3P%・FT%=各成功率 / REB=リバウンド / AST=アシスト / STL=スティール / TO=ターンオーバー / PF=ファウル</p>
+    </div>
+  </section>
+
+  <!-- 履歴 -->
+  <section id="tab-history" class="hide">
+    <div class="card"><h2>保存した試合</h2><div id="historyList"></div></div>
+    <div class="card hide" id="historyDetail">
+      <h2 id="historyTitle"></h2>
+      <div class="scroll"><table id="historyTable"></table></div>
+    </div>
+  </section>
+</main>
+
+<script>
+/* ===== 1. データの持ち方 =====
+   players : 選手の配列 [{id, num, name}]
+   events  : プレーの記録  [{pid, type}]  ← 集計は全部ここから計算する
+   history : 保存済みの試合                                        */
+var state = { players: [], events: [], opponent: "", selected: null, history: [] };
+
+/* ===== 2. 保存(localStorage)。使えない環境でも落ちないように try/catch ===== */
+var KEY = "bb-stats-v1";
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify({ players: state.players, events: state.events, opponent: state.opponent, history: state.history })); } catch (e) {}
+}
+function load() {
+  try {
+    var raw = localStorage.getItem(KEY);
+    if (raw) { var d = JSON.parse(raw); state.players = d.players || []; state.events = d.events || []; state.opponent = d.opponent || ""; state.history = d.history || []; }
+  } catch (e) {}
+}
+
+/* ===== 3. 便利関数 ===== */
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]; }); }
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+function pct(a, b) { return b === 0 ? "-" : Math.round(a / b * 100) + "%"; }
+var LABEL = { "2PM": "2P成功", "2PX": "2P失敗", "3PM": "3P成功", "3PX": "3P失敗", "FTM": "FT成功", "FTX": "FT失敗", "REB": "リバウンド", "AST": "アシスト", "STL": "スティール", "TO": "ターンオーバー", "PF": "ファウル", "OPP1": "相手+1", "OPP2": "相手+2", "OPP3": "相手+3" };
+
+/* ===== 4. 集計 =====
+   ある選手の events を数えて、得点や成功率を出す */
+function calc(events, pid) {
+  var c = {}; Object.keys(LABEL).forEach(function (k) { c[k] = 0; });
+  events.forEach(function (e) { if (e.pid === pid) c[e.type]++; });
+  var fgm = c["2PM"] + c["3PM"], fga = fgm + c["2PX"] + c["3PX"];
+  var tpa = c["3PM"] + c["3PX"], fta = c["FTM"] + c["FTX"];
+  return {
+    pts: c["2PM"] * 2 + c["3PM"] * 3 + c["FTM"],
+    fg: pct(fgm, fga), tp: pct(c["3PM"], tpa), ft: pct(c["FTM"], fta),
+    reb: c["REB"], ast: c["AST"], stl: c["STL"], to: c["TO"], pf: c["PF"]
+  };
+}
+function teamScore(events) {
+  return state.players.reduce(function (s, p) { return s + calc(events, p.id).pts; }, 0);
+}
+function oppScore(events) {
+  return events.reduce(function (s, e) { return s + (e.type.indexOf("OPP") === 0 ? Number(e.type.slice(3)) : 0); }, 0);
+}
+function tableHTML(players, events) {
+  var h = "<tr><th>選手</th><th>PTS</th><th>FG%</th><th>3P%</th><th>FT%</th><th>REB</th><th>AST</th><th>STL</th><th>TO</th><th>PF</th></tr>";
+  if (players.length === 0) return h;
+  players.forEach(function (p) {
+    var s = calc(events, p.id);
+    h += "<tr><td>#" + esc(p.num) + " " + esc(p.name) + "</td><td><b>" + s.pts + "</b></td><td>" + s.fg + "</td><td>" + s.tp + "</td><td>" + s.ft + "</td><td>" + s.reb + "</td><td>" + s.ast + "</td><td>" + s.stl + "</td><td>" + s.to + "</td><td>" + s.pf + "</td></tr>";
+  });
+  return h;
+}
+
+/* ===== 5. 画面の描画 ===== */
+function renderPlayers() {
+  var el = $("playerList");
+  if (state.players.length === 0) { el.innerHTML = '<p class="muted">まだ登録されていません。</p>'; return; }
+  el.innerHTML = state.players.map(function (p) {
+    return '<div class="item"><span>#' + esc(p.num) + " " + esc(p.name) + '</span><button class="ghost" data-del="' + p.id + '">削除</button></div>';
+  }).join("");
+}
+function renderRecord() {
+  $("noPlayerMsg").classList.toggle("hide", state.players.length > 0);
+  $("selectChips").innerHTML = state.players.map(function (p) {
+    return '<button class="chip' + (state.selected === p.id ? " sel" : "") + '" data-pid="' + p.id + '">#' + esc(p.num) + " " + esc(p.name) + "</button>";
+  }).join("");
+  $("myScore").textContent = teamScore(state.events);
+  $("oppScore").textContent = oppScore(state.events);
+  $("opponent").value = state.opponent;
+  var rows = state.events.slice(-6).reverse().map(function (e) {
+    var who = e.pid === "opp" ? "相手" : (function () { var p = state.players.find(function (x) { return x.id === e.pid; }); return p ? "#" + esc(p.num) + " " + esc(p.name) : "(削除済み)"; })();
+    return '<div class="log"><span>' + who + "</span><span>" + LABEL[e.type] + "</span></div>";
+  }).join("");
+  $("log").innerHTML = rows || '<p class="muted">まだ記録がありません。</p>';
+}
+function renderStats() { $("statsTable").innerHTML = tableHTML(state.players, state.events); }
+function renderHistory() {
+  var el = $("historyList");
+  if (state.history.length === 0) { el.innerHTML = '<p class="muted">保存された試合はありません。</p>'; return; }
+  el.innerHTML = state.history.slice().reverse().map(function (g) {
+    return '<div class="item"><span><b>' + esc(g.date) + "</b> vs " + esc(g.opponent || "相手未入力") + "<br><span class='muted'>" + g.my + " - " + g.opp + '</span></span><span><button class="ghost" data-view="' + g.id + '">見る</button> <button class="ghost" data-gdel="' + g.id + '">削除</button></span></div>';
+  }).join("");
+}
+function renderAll() { renderPlayers(); renderRecord(); renderStats(); renderHistory(); }
+
+/* ===== 6. 操作(クリック)の処理 ===== */
+$("tabs").addEventListener("click", function (e) {
+  var t = e.target.getAttribute("data-tab"); if (!t) return;
+  ["players", "record", "stats", "history"].forEach(function (n) { $("tab-" + n).classList.toggle("hide", n !== t); });
+  Array.prototype.forEach.call($("tabs").children, function (b) { b.classList.toggle("on", b === e.target); });
+  renderAll();
+});
+$("addPlayer").addEventListener("click", function () {
+  var name = $("pName").value.trim(), num = $("pNum").value.trim();
+  if (!name) return;
+  state.players.push({ id: uid(), num: num || "-", name: name });
+  $("pName").value = ""; $("pNum").value = "";
+  save(); renderAll();
+});
+$("playerList").addEventListener("click", function (e) {
+  var id = e.target.getAttribute("data-del"); if (!id) return;
+  state.players = state.players.filter(function (p) { return p.id !== id; });
+  if (state.selected === id) state.selected = null;
+  save(); renderAll();
+});
+$("selectChips").addEventListener("click", function (e) {
+  var id = e.target.getAttribute("data-pid"); if (!id) return;
+  state.selected = id; renderRecord();
+});
+$("tab-record").addEventListener("click", function (e) {
+  var ev = e.target.getAttribute("data-ev"), opp = e.target.getAttribute("data-opp");
+  if (ev) {
+    if (!state.selected) { $("noPlayerMsg").textContent = "先に選手をタップして選んでください。"; $("noPlayerMsg").classList.remove("hide"); return; }
+    state.events.push({ pid: state.selected, type: ev }); save(); renderRecord();
+    if (navigator.vibrate) { try { navigator.vibrate(20); } catch (x) {} }
+  }
+  if (opp) { state.events.push({ pid: "opp", type: "OPP" + opp }); save(); renderRecord(); }
+});
+$("undo").addEventListener("click", function () { state.events.pop(); save(); renderRecord(); });
+$("opponent").addEventListener("input", function (e) { state.opponent = e.target.value; save(); });
+$("finish").addEventListener("click", function () {
+  if (state.events.length === 0) return;
+  var d = new Date();
+  state.history.push({
+    id: uid(), date: d.getFullYear() + "/" + (d.getMonth() + 1) + "/" + d.getDate(),
+    opponent: state.opponent, my: teamScore(state.events), opp: oppScore(state.events),
+    players: JSON.parse(JSON.stringify(state.players)), events: state.events.slice()
+  });
+  state.events = []; state.opponent = ""; state.selected = null;
+  save(); renderAll();
+  document.querySelector('[data-tab="history"]').click();
+});
+$("historyList").addEventListener("click", function (e) {
+  var v = e.target.getAttribute("data-view"), del = e.target.getAttribute("data-gdel");
+  if (del) { state.history = state.history.filter(function (g) { return g.id !== del; }); save(); $("historyDetail").classList.add("hide"); renderHistory(); }
+  if (v) {
+    var g = state.history.find(function (x) { return x.id === v; }); if (!g) return;
+    $("historyTitle").textContent = g.date + " vs " + (g.opponent || "相手未入力") + "  " + g.my + " - " + g.opp;
+    $("historyTable").innerHTML = tableHTML(g.players, g.events);
+    $("historyDetail").classList.remove("hide");
+  }
+});
+
+load(); renderAll();
+</script>
+</body>
+</html>
