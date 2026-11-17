@@ -17,11 +17,14 @@
   h2 { font-size:15px; margin:0 0 8px; }
   input[type=text], input[type=number] { padding:10px; border:1px solid var(--line); border-radius:8px; font-size:16px; width:100%; }
   .row { display:flex; gap:8px; }
-  button.primary { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:10px 14px; font-size:15px; font-weight:700; }
+  button.primary { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:10px 14px; font-size:15px; font-weight:700; white-space:nowrap; }
   button.ghost { background:#fff; border:1px solid var(--line); border-radius:8px; padding:8px 12px; font-size:14px; }
   .chips { display:flex; flex-wrap:wrap; gap:8px; }
   .chip { border:2px solid var(--line); background:#fff; border-radius:999px; padding:8px 14px; font-size:15px; }
   .chip.sel { border-color:var(--accent); background:#fff1e8; font-weight:700; }
+  .chip.oppchip { border-style:dashed; }
+  .team { flex:1; padding:10px 0; font-size:15px; border:2px solid var(--line); border-radius:10px; background:#fff; }
+  .team.on { border-color:var(--accent); background:#fff1e8; font-weight:700; }
   .score { display:flex; justify-content:center; align-items:center; gap:18px; font-size:34px; font-weight:800; }
   .score small { display:block; font-size:12px; color:var(--sub); font-weight:400; text-align:center; }
   .grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
@@ -38,6 +41,7 @@
   th { color:var(--sub); font-weight:600; font-size:12px; }
   .hide { display:none; }
   .item { display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--line); }
+  .sub { font-size:13px; color:var(--sub); margin:12px 0 4px; font-weight:700; }
 </style>
 </head>
 <body>
@@ -49,10 +53,10 @@
   <button data-tab="history">履歴</button>
 </nav>
 <main>
-  <!-- 選手登録 -->
+  <!-- 選手登録(自チーム) -->
   <section id="tab-players">
     <div class="card">
-      <h2>選手を追加</h2>
+      <h2>自チームの選手を追加</h2>
       <div class="row">
         <input type="number" id="pNum" placeholder="背番号" style="width:90px">
         <input type="text" id="pName" placeholder="名前">
@@ -60,6 +64,7 @@
       </div>
     </div>
     <div class="card"><h2>登録済みの選手</h2><div id="playerList"></div></div>
+    <p class="muted">相手チームの選手は、「記録」タブで背番号を入力するだけで追加できます(試合ごとにリセットされます)。</p>
   </section>
 
   <!-- 試合中の記録 -->
@@ -75,16 +80,25 @@
         <div>-</div>
         <div><span id="oppScore">0</span><small>相手</small></div>
       </div>
-      <div class="row" style="margin-top:10px; justify-content:center">
+      <p class="muted" style="text-align:center; margin:10px 0 6px">背番号が分からない相手の得点はこちら</p>
+      <div class="row" style="justify-content:center">
         <button class="ghost" data-opp="1">相手 +1</button>
         <button class="ghost" data-opp="2">相手 +2</button>
         <button class="ghost" data-opp="3">相手 +3</button>
       </div>
     </div>
     <div class="card">
-      <h2>1. 選手を選ぶ</h2>
+      <h2>1. チームと選手を選ぶ</h2>
+      <div class="row" style="margin-bottom:10px">
+        <button class="team on" data-team="my">自チーム</button>
+        <button class="team" data-team="opp">相手チーム</button>
+      </div>
       <div class="chips" id="selectChips"></div>
-      <p class="muted" id="noPlayerMsg">先に「選手」タブで選手を登録してください。</p>
+      <p class="muted" id="noPlayerMsg"></p>
+      <div class="row hide" id="oppAdd" style="margin-top:10px">
+        <input type="number" id="oNum" placeholder="相手の背番号を入力">
+        <button class="primary" id="addOpp">追加</button>
+      </div>
     </div>
     <div class="card">
       <h2>2. プレーをタップ</h2>
@@ -100,10 +114,11 @@
         <button class="nt" data-ev="REB">リバウンド</button>
         <button class="nt" data-ev="AST">アシスト</button>
         <button class="nt" data-ev="STL">スティール</button>
+        <button class="nt" data-ev="BLK">ブロック</button>
         <button class="nt" data-ev="TO">ターンオーバー</button>
         <button class="nt" data-ev="PF">ファウル</button>
-        <button class="ghost" id="undo" style="color:#000">↩ 取り消し</button>
       </div>
+      <button class="ghost" id="undo" style="color:#000; width:100%; margin-top:8px; padding:12px">↩ 取り消し</button>
     </div>
     <div class="card">
       <h2>直近の記録</h2>
@@ -116,8 +131,11 @@
   <section id="tab-stats" class="hide">
     <div class="card">
       <h2>今の試合の個人成績</h2>
+      <div class="sub">自チーム</div>
       <div class="scroll"><table id="statsTable"></table></div>
-      <p class="muted">PTS=得点 / FG%=2P・3Pの成功率 / 3P%・FT%=各成功率 / REB=リバウンド / AST=アシスト / STL=スティール / TO=ターンオーバー / PF=ファウル</p>
+      <div class="sub">相手チーム</div>
+      <div class="scroll"><table id="oppStatsTable"></table></div>
+      <p class="muted">PTS=得点 / FG%=2P・3Pの成功率 / 3P%・FT%=各成功率 / REB=リバウンド / AST=アシスト / STL=スティール / BLK=ブロック / TO=ターンオーバー / PF=ファウル / EFF=貢献度(得点+リバウンド+アシスト+スティール+ブロック−シュート失敗−FT失敗−ターンオーバー)</p>
     </div>
   </section>
 
@@ -126,27 +144,36 @@
     <div class="card"><h2>保存した試合</h2><div id="historyList"></div></div>
     <div class="card hide" id="historyDetail">
       <h2 id="historyTitle"></h2>
+      <div class="sub">自チーム</div>
       <div class="scroll"><table id="historyTable"></table></div>
+      <div class="sub">相手チーム</div>
+      <div class="scroll"><table id="historyOppTable"></table></div>
     </div>
   </section>
 </main>
 
 <script>
 /* ===== 1. データの持ち方 =====
-   players : 選手の配列 [{id, num, name}]
-   events  : プレーの記録  [{pid, type}]  ← 集計は全部ここから計算する
-   history : 保存済みの試合                                        */
-var state = { players: [], events: [], opponent: "", selected: null, history: [] };
+   players    : 自チームの選手 [{id, num, name}]
+   oppPlayers : 相手チームの選手 [{id, num, name}]  ← 試合ごとにリセット
+   events     : プレーの記録  [{pid, type}]  ← 集計は全部ここから計算する
+   history    : 保存済みの試合
+   team       : いま記録しているチーム("my" か "opp")                    */
+var state = { players: [], oppPlayers: [], events: [], opponent: "", selected: null, team: "my", history: [] };
 
 /* ===== 2. 保存(localStorage)。使えない環境でも落ちないように try/catch ===== */
 var KEY = "bb-stats-v1";
 function save() {
-  try { localStorage.setItem(KEY, JSON.stringify({ players: state.players, events: state.events, opponent: state.opponent, history: state.history })); } catch (e) {}
+  try { localStorage.setItem(KEY, JSON.stringify({ players: state.players, oppPlayers: state.oppPlayers, events: state.events, opponent: state.opponent, history: state.history })); } catch (e) {}
 }
 function load() {
   try {
     var raw = localStorage.getItem(KEY);
-    if (raw) { var d = JSON.parse(raw); state.players = d.players || []; state.events = d.events || []; state.opponent = d.opponent || ""; state.history = d.history || []; }
+    if (raw) {
+      var d = JSON.parse(raw);
+      state.players = d.players || []; state.oppPlayers = d.oppPlayers || [];
+      state.events = d.events || []; state.opponent = d.opponent || ""; state.history = d.history || [];
+    }
   } catch (e) {}
 }
 
@@ -155,7 +182,8 @@ function $(id) { return document.getElementById(id); }
 function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]; }); }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 function pct(a, b) { return b === 0 ? "-" : Math.round(a / b * 100) + "%"; }
-var LABEL = { "2PM": "2P成功", "2PX": "2P失敗", "3PM": "3P成功", "3PX": "3P失敗", "FTM": "FT成功", "FTX": "FT失敗", "REB": "リバウンド", "AST": "アシスト", "STL": "スティール", "TO": "ターンオーバー", "PF": "ファウル", "OPP1": "相手+1", "OPP2": "相手+2", "OPP3": "相手+3" };
+function pname(p) { return "#" + esc(p.num) + (p.name ? " " + esc(p.name) : ""); }
+var LABEL = { "2PM": "2P成功", "2PX": "2P失敗", "3PM": "3P成功", "3PX": "3P失敗", "FTM": "FT成功", "FTX": "FT失敗", "REB": "リバウンド", "AST": "アシスト", "STL": "スティール", "BLK": "ブロック", "TO": "ターンオーバー", "PF": "ファウル", "OPP1": "相手+1", "OPP2": "相手+2", "OPP3": "相手+3" };
 
 /* ===== 4. 集計 =====
    ある選手の events を数えて、得点や成功率を出す */
@@ -164,26 +192,43 @@ function calc(events, pid) {
   events.forEach(function (e) { if (e.pid === pid) c[e.type]++; });
   var fgm = c["2PM"] + c["3PM"], fga = fgm + c["2PX"] + c["3PX"];
   var tpa = c["3PM"] + c["3PX"], fta = c["FTM"] + c["FTX"];
+  var pts = c["2PM"] * 2 + c["3PM"] * 3 + c["FTM"];
+  /* EFF(貢献度)= 得点 + リバウンド + アシスト + スティール + ブロック
+                  − シュート失敗 − FT失敗 − ターンオーバー */
+  var eff = pts + c["REB"] + c["AST"] + c["STL"] + c["BLK"] - (c["2PX"] + c["3PX"]) - c["FTX"] - c["TO"];
   return {
-    pts: c["2PM"] * 2 + c["3PM"] * 3 + c["FTM"],
+    pts: pts, eff: eff,
     fg: pct(fgm, fga), tp: pct(c["3PM"], tpa), ft: pct(c["FTM"], fta),
-    reb: c["REB"], ast: c["AST"], stl: c["STL"], to: c["TO"], pf: c["PF"]
+    reb: c["REB"], ast: c["AST"], stl: c["STL"], blk: c["BLK"], to: c["TO"], pf: c["PF"]
   };
 }
-function teamScore(events) {
-  return state.players.reduce(function (s, p) { return s + calc(events, p.id).pts; }, 0);
+/* チーム全員の得点を合計 */
+function sumPts(players, events) {
+  return players.reduce(function (s, p) { return s + calc(events, p.id).pts; }, 0);
 }
-function oppScore(events) {
-  return events.reduce(function (s, e) { return s + (e.type.indexOf("OPP") === 0 ? Number(e.type.slice(3)) : 0); }, 0);
+function teamScore(events) { return sumPts(state.players, events); }
+/* 相手の得点 = 背番号を入力した選手の得点 + 「番号不明」ボタンの得点 */
+function oppScore(events, oppPlayers) {
+  var unknown = events.reduce(function (s, e) { return s + (e.type.indexOf("OPP") === 0 ? Number(e.type.slice(3)) : 0); }, 0);
+  return sumPts(oppPlayers, events) + unknown;
 }
 function tableHTML(players, events) {
-  var h = "<tr><th>選手</th><th>PTS</th><th>FG%</th><th>3P%</th><th>FT%</th><th>REB</th><th>AST</th><th>STL</th><th>TO</th><th>PF</th></tr>";
-  if (players.length === 0) return h;
+  var h = "<tr><th>選手</th><th>PTS</th><th>FG%</th><th>3P%</th><th>FT%</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>TO</th><th>PF</th><th>EFF</th></tr>";
+  if (players.length === 0) return h + '<tr><td colspan="12" class="muted" style="text-align:left">選手がいません</td></tr>';
   players.forEach(function (p) {
     var s = calc(events, p.id);
-    h += "<tr><td>#" + esc(p.num) + " " + esc(p.name) + "</td><td><b>" + s.pts + "</b></td><td>" + s.fg + "</td><td>" + s.tp + "</td><td>" + s.ft + "</td><td>" + s.reb + "</td><td>" + s.ast + "</td><td>" + s.stl + "</td><td>" + s.to + "</td><td>" + s.pf + "</td></tr>";
+    h += "<tr><td>" + pname(p) + "</td><td><b>" + s.pts + "</b></td><td>" + s.fg + "</td><td>" + s.tp + "</td><td>" + s.ft + "</td><td>" + s.reb + "</td><td>" + s.ast + "</td><td>" + s.stl + "</td><td>" + s.blk + "</td><td>" + s.to + "</td><td>" + s.pf + "</td><td><b>" + s.eff + "</b></td></tr>";
   });
   return h;
+}
+/* ログ表示用:選手IDから名前を探す */
+function whoLabel(pid) {
+  if (pid === "opp") return "相手(番号不明)";
+  var p = state.players.find(function (x) { return x.id === pid; });
+  if (p) return pname(p);
+  var o = state.oppPlayers.find(function (x) { return x.id === pid; });
+  if (o) return "相手 " + pname(o);
+  return "(削除済み)";
 }
 
 /* ===== 5. 画面の描画 ===== */
@@ -191,24 +236,39 @@ function renderPlayers() {
   var el = $("playerList");
   if (state.players.length === 0) { el.innerHTML = '<p class="muted">まだ登録されていません。</p>'; return; }
   el.innerHTML = state.players.map(function (p) {
-    return '<div class="item"><span>#' + esc(p.num) + " " + esc(p.name) + '</span><button class="ghost" data-del="' + p.id + '">削除</button></div>';
+    return '<div class="item"><span>' + pname(p) + '</span><button class="ghost" data-del="' + p.id + '">削除</button></div>';
   }).join("");
 }
 function renderRecord() {
-  $("noPlayerMsg").classList.toggle("hide", state.players.length > 0);
-  $("selectChips").innerHTML = state.players.map(function (p) {
-    return '<button class="chip' + (state.selected === p.id ? " sel" : "") + '" data-pid="' + p.id + '">#' + esc(p.num) + " " + esc(p.name) + "</button>";
+  var isMy = state.team === "my";
+  var list = isMy ? state.players : state.oppPlayers;
+
+  /* チーム切り替えボタンの見た目 */
+  Array.prototype.forEach.call(document.querySelectorAll(".team"), function (b) {
+    b.classList.toggle("on", b.getAttribute("data-team") === state.team);
+  });
+  $("oppAdd").classList.toggle("hide", isMy);
+
+  /* 選手のチップ */
+  $("selectChips").innerHTML = list.map(function (p) {
+    return '<button class="chip' + (isMy ? "" : " oppchip") + (state.selected === p.id ? " sel" : "") + '" data-pid="' + p.id + '">' + pname(p) + "</button>";
   }).join("");
+  $("noPlayerMsg").textContent = isMy ? "先に「選手」タブで選手を登録してください。" : "相手の背番号を入力して追加してください。";
+  $("noPlayerMsg").classList.toggle("hide", list.length > 0);
+
   $("myScore").textContent = teamScore(state.events);
-  $("oppScore").textContent = oppScore(state.events);
+  $("oppScore").textContent = oppScore(state.events, state.oppPlayers);
   $("opponent").value = state.opponent;
+
   var rows = state.events.slice(-6).reverse().map(function (e) {
-    var who = e.pid === "opp" ? "相手" : (function () { var p = state.players.find(function (x) { return x.id === e.pid; }); return p ? "#" + esc(p.num) + " " + esc(p.name) : "(削除済み)"; })();
-    return '<div class="log"><span>' + who + "</span><span>" + LABEL[e.type] + "</span></div>";
+    return '<div class="log"><span>' + whoLabel(e.pid) + "</span><span>" + LABEL[e.type] + "</span></div>";
   }).join("");
   $("log").innerHTML = rows || '<p class="muted">まだ記録がありません。</p>';
 }
-function renderStats() { $("statsTable").innerHTML = tableHTML(state.players, state.events); }
+function renderStats() {
+  $("statsTable").innerHTML = tableHTML(state.players, state.events);
+  $("oppStatsTable").innerHTML = tableHTML(state.oppPlayers, state.events);
+}
 function renderHistory() {
   var el = $("historyList");
   if (state.history.length === 0) { el.innerHTML = '<p class="muted">保存された試合はありません。</p>'; return; }
@@ -242,8 +302,21 @@ $("selectChips").addEventListener("click", function (e) {
   var id = e.target.getAttribute("data-pid"); if (!id) return;
   state.selected = id; renderRecord();
 });
+/* 相手選手の追加:同じ背番号がすでにあれば、それを選択するだけ */
+$("addOpp").addEventListener("click", function () {
+  var num = $("oNum").value.trim(); if (!num) return;
+  var found = state.oppPlayers.find(function (p) { return p.num === num; });
+  if (found) { state.selected = found.id; }
+  else {
+    var p = { id: uid(), num: num, name: "" };
+    state.oppPlayers.push(p); state.selected = p.id;
+  }
+  $("oNum").value = "";
+  save(); renderRecord();
+});
 $("tab-record").addEventListener("click", function (e) {
-  var ev = e.target.getAttribute("data-ev"), opp = e.target.getAttribute("data-opp");
+  var ev = e.target.getAttribute("data-ev"), opp = e.target.getAttribute("data-opp"), tm = e.target.getAttribute("data-team");
+  if (tm) { state.team = tm; state.selected = null; renderRecord(); return; }
   if (ev) {
     if (!state.selected) { $("noPlayerMsg").textContent = "先に選手をタップして選んでください。"; $("noPlayerMsg").classList.remove("hide"); return; }
     state.events.push({ pid: state.selected, type: ev }); save(); renderRecord();
@@ -258,10 +331,13 @@ $("finish").addEventListener("click", function () {
   var d = new Date();
   state.history.push({
     id: uid(), date: d.getFullYear() + "/" + (d.getMonth() + 1) + "/" + d.getDate(),
-    opponent: state.opponent, my: teamScore(state.events), opp: oppScore(state.events),
-    players: JSON.parse(JSON.stringify(state.players)), events: state.events.slice()
+    opponent: state.opponent, my: teamScore(state.events), opp: oppScore(state.events, state.oppPlayers),
+    players: JSON.parse(JSON.stringify(state.players)),
+    oppPlayers: JSON.parse(JSON.stringify(state.oppPlayers)),
+    events: state.events.slice()
   });
-  state.events = []; state.opponent = ""; state.selected = null;
+  /* 次の試合のために、相手選手と記録をリセット(自チームの選手は残す) */
+  state.events = []; state.oppPlayers = []; state.opponent = ""; state.selected = null; state.team = "my";
   save(); renderAll();
   document.querySelector('[data-tab="history"]').click();
 });
@@ -272,6 +348,7 @@ $("historyList").addEventListener("click", function (e) {
     var g = state.history.find(function (x) { return x.id === v; }); if (!g) return;
     $("historyTitle").textContent = g.date + " vs " + (g.opponent || "相手未入力") + "  " + g.my + " - " + g.opp;
     $("historyTable").innerHTML = tableHTML(g.players, g.events);
+    $("historyOppTable").innerHTML = tableHTML(g.oppPlayers || [], g.events);
     $("historyDetail").classList.remove("hide");
   }
 });
